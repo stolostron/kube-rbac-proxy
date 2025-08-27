@@ -14,3 +14,13 @@ EXPOSE 8080
 USER 65532:65532
 
 ENTRYPOINT ["/usr/local/bin/kube-rbac-proxy"]
+
+LABEL com.redhat.component="kube-rbac-proxy" \
+name="kube-rbac-proxy" \
+summary="kube-rbac-proxy" \
+io.openshift.expose-services="" \
+io.openshift.tags="data,images" \
+io.k8s.display-name="kube-rbac-proxy" \
+maintainer="" \
+description="kube-rbac-proxy" \
+io.k8s.description="kube-rbac-proxy"
