@@ -1,12 +1,12 @@
 # Copyright Contributors to the Open Cluster Management project
 
-FROM registry.ci.openshift.org/stolostron/builder:go1.21-linux AS builder
+FROM registry.ci.openshift.org/stolostron/builder:go1.24-linux AS builder
 
 WORKDIR /workspace
 COPY . .
 RUN go build --installsuffix cgo
 
-FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 
 COPY --from=builder /workspace/kube-rbac-proxy /usr/local/bin/kube-rbac-proxy
 EXPOSE 8080
