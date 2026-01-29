@@ -40,6 +40,10 @@ spec:
     value: '{"type": "gomod", "path": "."}'
   - name: build-source-image
     value: "true"
+  - name: build-args
+    value:
+    - IMAGE_NAME=rhacm2/kube-rbac-proxy-rhel9
+    - CPE_LABEL=cpe:/a:redhat:acm:2.16::el9
   pipelineRef:
     resolver: git
     params:
