@@ -9,6 +9,9 @@ RUN CGO_ENABLED=1 GOFLAGS="" go build --installsuffix cgo
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 
+ARG IMAGE_NAME="kube-rbac-proxy"
+ARG CPE_LABEL=""
+
 COPY --from=builder /workspace/kube-rbac-proxy /usr/local/bin/kube-rbac-proxy
 EXPOSE 8080
 USER 65532:65532
@@ -16,7 +19,8 @@ USER 65532:65532
 ENTRYPOINT ["/usr/local/bin/kube-rbac-proxy"]
 
 LABEL com.redhat.component="kube-rbac-proxy" \
-name="kube-rbac-proxy" \
+name="${IMAGE_NAME}" \
+cpe="${CPE_LABEL}" \
 summary="kube-rbac-proxy" \
 io.openshift.expose-services="" \
 io.openshift.tags="data,images" \
