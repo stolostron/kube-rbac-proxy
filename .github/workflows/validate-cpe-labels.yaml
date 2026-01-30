@@ -1,0 +1,208 @@
+name: Validate CPE Labels
+
+on:
+  pull_request:
+    branches:
+      - 'release-*'
+      - 'backplane-*'
+      - 'main'
+    paths:
+      - 'COMPONENT_VERSION'
+      - '.tekton/**'
+      - 'Containerfile.operator'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate CPE Labels
+        run: |
+          #!/bin/bash
+          set -e
+
+          echo "================================================"
+          echo "Validating CPE Labels and Image Names"
+          echo "================================================"
+          echo ""
+
+          # Read component version
+          if [ ! -f COMPONENT_VERSION ]; then
+            echo "❌ ERROR: COMPONENT_VERSION file not found"
+            exit 1
+          fi
+
+          VERSION=$(cat COMPONENT_VERSION | tr -d '\n')
+          echo "Component version: $VERSION"
+
+          # Extract major.minor (e.g., 2.16.0 -> 2.16)
+          MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1,2)
+          echo "Major.Minor version: $MAJOR_MINOR"
+          echo ""
+
+          # Check Containerfile has ARG variables
+          echo "Checking Containerfile.operator..."
+          if ! grep -q "ARG IMAGE_NAME=" Containerfile.operator; then
+            echo "❌ ERROR: Containerfile.operator missing 'ARG IMAGE_NAME='"
+            echo "   The Containerfile must declare: ARG IMAGE_NAME=\"kube-rbac-proxy\""
+            exit 1
+          fi
+
+          if ! grep -q "ARG CPE_LABEL=" Containerfile.operator; then
+            echo "❌ ERROR: Containerfile.operator missing 'ARG CPE_LABEL='"
+            echo "   The Containerfile must declare: ARG CPE_LABEL=\"\""
+            exit 1
+          fi
+
+          if ! grep -q 'name="${IMAGE_NAME}"' Containerfile.operator; then
+            echo "❌ ERROR: Containerfile.operator not using IMAGE_NAME variable"
+            echo "   The LABEL section must include: name=\"\${IMAGE_NAME}\""
+            exit 1
+          fi
+
+          if ! grep -q 'cpe="${CPE_LABEL}"' Containerfile.operator; then
+            echo "❌ ERROR: Containerfile.operator not using CPE_LABEL variable"
+            echo "   The LABEL section must include: cpe=\"\${CPE_LABEL}\""
+            exit 1
+          fi
+
+          echo "✅ Containerfile.operator has correct ARG variables"
+          echo ""
+
+          # Track validation status
+          ERRORS=0
+
+          # Check ACM tekton files
+          echo "Checking ACM tekton files..."
+          ACM_FILES=$(find .tekton -name "*-acm-*-push.yaml" -o -name "*-acm-*-pull-request.yaml" 2>/dev/null || true)
+
+          if [ -n "$ACM_FILES" ]; then
+            for file in $ACM_FILES; do
+              echo "  Checking $file..."
+
+              # Check if file has build-args section
+              if ! grep -q "build-args" "$file"; then
+                echo "  ⚠️  WARNING: $file does not have build-args parameter"
+                echo "     Skipping validation (CPE labels may not be set)"
+                continue
+              fi
+
+              # Extract IMAGE_NAME value
+              IMAGE_NAME=$(grep -A 3 "build-args" "$file" | grep "IMAGE_NAME=" | sed 's/.*IMAGE_NAME=//' | tr -d ' ')
+
+              # Extract CPE_LABEL value
+              CPE_LABEL=$(grep -A 3 "build-args" "$file" | grep "CPE_LABEL=" | sed 's/.*CPE_LABEL=//' | tr -d ' ')
+
+              # Expected values for ACM
+              EXPECTED_NAME="rhacm2/kube-rbac-proxy-rhel9"
+              EXPECTED_CPE="cpe:/a:redhat:acm:${MAJOR_MINOR}::el9"
+
+              # Validate IMAGE_NAME
+              if [ "$IMAGE_NAME" != "$EXPECTED_NAME" ]; then
+                echo "  ❌ ERROR: $file has incorrect IMAGE_NAME"
+                echo "     Expected: $EXPECTED_NAME"
+                echo "     Found:    $IMAGE_NAME"
+                ERRORS=$((ERRORS + 1))
+              fi
+
+              # Validate CPE_LABEL
+              if [ "$CPE_LABEL" != "$EXPECTED_CPE" ]; then
+                echo "  ❌ ERROR: $file has incorrect CPE_LABEL"
+                echo "     Expected: $EXPECTED_CPE"
+                echo "     Found:    $CPE_LABEL"
+                echo ""
+                echo "     ACTION REQUIRED: Update the build-args in $file"
+                echo "     The CPE version must match COMPONENT_VERSION ($MAJOR_MINOR)"
+                ERRORS=$((ERRORS + 1))
+              else
+                echo "  ✅ $file is valid"
+              fi
+            done
+            echo ""
+          else
+            echo "  No ACM tekton files found (this is OK for backplane-only branches)"
+            echo ""
+          fi
+
+          # Check MCE tekton files
+          echo "Checking MCE tekton files..."
+          MCE_FILES=$(find .tekton -name "*-mce-*-push.yaml" -o -name "*-mce-*-pull-request.yaml" 2>/dev/null || true)
+
+          if [ -n "$MCE_FILES" ]; then
+            for file in $MCE_FILES; do
+              echo "  Checking $file..."
+
+              # Check if file has build-args section
+              if ! grep -q "build-args" "$file"; then
+                echo "  ⚠️  WARNING: $file does not have build-args parameter"
+                echo "     Skipping validation (CPE labels may not be set)"
+                continue
+              fi
+
+              # Extract MCE version from filename
+              # e.g., kube-rbac-proxy-mce-211-push.yaml -> 211 -> 2.11
+              BASENAME=$(basename "$file")
+              MCE_VERSION_RAW=$(echo "$BASENAME" | sed -n 's/.*mce-\([0-9][0-9]*\).*/\1/p')
+
+              if [ -z "$MCE_VERSION_RAW" ]; then
+                echo "  ❌ ERROR: Cannot extract MCE version from filename: $BASENAME"
+                ERRORS=$((ERRORS + 1))
+                continue
+              fi
+
+              # Convert 211 -> 2.11, 210 -> 2.10, etc.
+              MCE_VERSION=$(echo "$MCE_VERSION_RAW" | sed 's/\(.\)\(.*\)/\1.\2/')
+
+              # Extract IMAGE_NAME value
+              IMAGE_NAME=$(grep -A 3 "build-args" "$file" | grep "IMAGE_NAME=" | sed 's/.*IMAGE_NAME=//' | tr -d ' ')
+
+              # Extract CPE_LABEL value
+              CPE_LABEL=$(grep -A 3 "build-args" "$file" | grep "CPE_LABEL=" | sed 's/.*CPE_LABEL=//' | tr -d ' ')
+
+              # Expected values for MCE
+              EXPECTED_NAME="multicluster-engine/kube-rbac-proxy-mce-rhel9"
+              EXPECTED_CPE="cpe:/a:redhat:multicluster_engine:${MCE_VERSION}::el9"
+
+              # Validate IMAGE_NAME
+              if [ "$IMAGE_NAME" != "$EXPECTED_NAME" ]; then
+                echo "  ❌ ERROR: $file has incorrect IMAGE_NAME"
+                echo "     Expected: $EXPECTED_NAME"
+                echo "     Found:    $IMAGE_NAME"
+                ERRORS=$((ERRORS + 1))
+              fi
+
+              # Validate CPE_LABEL
+              if [ "$CPE_LABEL" != "$EXPECTED_CPE" ]; then
+                echo "  ❌ ERROR: $file has incorrect CPE_LABEL"
+                echo "     Expected: $EXPECTED_CPE"
+                echo "     Found:    $CPE_LABEL"
+                echo ""
+                echo "     ACTION REQUIRED: Update the build-args in $file"
+                echo "     The CPE version must match the MCE version in the filename ($MCE_VERSION)"
+                ERRORS=$((ERRORS + 1))
+              else
+                echo "  ✅ $file is valid (MCE $MCE_VERSION)"
+              fi
+            done
+            echo ""
+          else
+            echo "  No MCE tekton files found (this is OK for ACM-only branches)"
+            echo ""
+          fi
+
+          # Final summary
+          echo "================================================"
+          if [ $ERRORS -eq 0 ]; then
+            echo "✅ All CPE labels and image names are valid!"
+            echo "================================================"
+            exit 0
+          else
+            echo "❌ Validation failed with $ERRORS error(s)"
+            echo "================================================"
+            echo ""
+            echo "Please update the build-args in the affected .tekton/*.yaml files"
+            echo "to match the expected CPE labels and image names."
+            exit 1
+          fi
