@@ -26,7 +26,6 @@ jobs:
           VERSION=$(cat VERSION)-$(git rev-parse --short HEAD)
           docker tag "quay.io/brancz/kube-rbac-proxy:${VERSION}" quay.io/brancz/kube-rbac-proxy:local
           make curl-container
-          docker pull quay.io/brancz/prometheus-example-app:v0.1.0
 
       - name: Create Kind cluster
         uses: helm/kind-action@v1
@@ -39,7 +38,6 @@ jobs:
         run: |
           kind load docker-image quay.io/brancz/kube-rbac-proxy:local --name kube-rbac-proxy-e2e
           kind load docker-image quay.io/brancz/krp-curl:v0.0.2 --name kube-rbac-proxy-e2e
-          kind load docker-image quay.io/brancz/prometheus-example-app:v0.1.0 --name kube-rbac-proxy-e2e
 
       - name: Run e2e tests
         run: make test-e2e KUBECONFIG="${HOME}/.kube/config"
