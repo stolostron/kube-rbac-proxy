@@ -28,7 +28,7 @@ jobs:
           make curl-container
 
       - name: Create Kind cluster
-        uses: helm/kind-action@v1
+        uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0
         with:
           config: test/e2e/kind-config/kind-config.yaml
           cluster_name: kube-rbac-proxy-e2e
