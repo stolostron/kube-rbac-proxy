@@ -1,0 +1,43 @@
+
+name: 'End to End Tests'
+on: [pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build binary
+        run: make build GOOS=linux GOARCH=amd64
+
+      - name: Build and tag container images
+        run: |
+          make container GOOS=linux GOARCH=amd64
+          VERSION=$(cat VERSION)-$(git rev-parse --short HEAD)
+          docker tag "quay.io/brancz/kube-rbac-proxy:${VERSION}" quay.io/brancz/kube-rbac-proxy:local
+          make curl-container
+
+      - name: Create Kind cluster
+        uses: helm/kind-action@v1
+        with:
+          config: test/e2e/kind-config/kind-config.yaml
+          cluster_name: kube-rbac-proxy-e2e
+          wait: 120s
+
+      - name: Load images into Kind
+        run: |
+          kind load docker-image quay.io/brancz/kube-rbac-proxy:local --name kube-rbac-proxy-e2e
+          kind load docker-image quay.io/brancz/krp-curl:v0.0.2 --name kube-rbac-proxy-e2e
+
+      - name: Run e2e tests
+        run: make test-e2e KUBECONFIG="${HOME}/.kube/config"
