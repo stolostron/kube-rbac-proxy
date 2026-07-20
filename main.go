@@ -31,6 +31,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/brancz/kube-rbac-proxy/pkg/authn"
+	"github.com/brancz/kube-rbac-proxy/pkg/authz"
+	"github.com/brancz/kube-rbac-proxy/pkg/proxy"
+	rbac_proxy_tls "github.com/brancz/kube-rbac-proxy/pkg/tls"
 	"github.com/ghodss/yaml"
 	"github.com/oklog/run"
 	"github.com/spf13/pflag"
@@ -43,11 +47,7 @@ import (
 	certutil "k8s.io/client-go/util/cert"
 	k8sapiflag "k8s.io/component-base/cli/flag"
 	"k8s.io/klog/v2"
-
-	"github.com/brancz/kube-rbac-proxy/pkg/authn"
-	"github.com/brancz/kube-rbac-proxy/pkg/authz"
-	"github.com/brancz/kube-rbac-proxy/pkg/proxy"
-	rbac_proxy_tls "github.com/brancz/kube-rbac-proxy/pkg/tls"
+	sdktls "open-cluster-management.io/sdk-go/pkg/tls"
 )
 
 type config struct {
@@ -134,6 +134,10 @@ func main() {
 	flagset.StringVar(&cfg.kubeconfigLocation, "kubeconfig", "", "Path to a kubeconfig file, specifying how to connect to the API server. If unset, in-cluster configuration will be used")
 
 	_ = flagset.Parse(os.Args[1:])
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	kcfg := initKubeConfig(cfg.kubeconfigLocation)
 
 	upstreamURL, err := url.Parse(cfg.upstream)
@@ -266,7 +270,7 @@ func main() {
 				srv.TLSConfig.Certificates = []tls.Certificate{cert}
 			} else {
 				klog.Info("Reading certificate files")
-				ctx, cancel := context.WithCancel(context.Background())
+				certCtx, certCancel := context.WithCancel(ctx)
 				r, err := rbac_proxy_tls.NewCertReloader(cfg.tls.certFile, cfg.tls.keyFile, cfg.tls.reloadInterval)
 				if err != nil {
 					klog.Fatalf("Failed to initialize certificate reloader: %v", err)
@@ -275,9 +279,9 @@ func main() {
 				srv.TLSConfig.GetCertificate = r.GetCertificate
 
 				gr.Add(func() error {
-					return r.Watch(ctx)
+					return r.Watch(certCtx)
 				}, func(error) {
-					cancel()
+					certCancel()
 				})
 			}
 
@@ -294,6 +298,26 @@ func main() {
 			srv.TLSConfig.CipherSuites = cipherSuiteIDs
 			srv.TLSConfig.MinVersion = version
 			srv.TLSConfig.ClientAuth = tls.RequestClientCert
+
+			podNamespace := os.Getenv("POD_NAMESPACE")
+			if podNamespace != "" {
+				sdkTLSConfig, err := sdktls.StartTLSConfigMapWatcher(ctx, kubeClient, podNamespace, func() {
+					klog.Info("TLS ConfigMap changed, restarting")
+					os.Exit(0)
+				})
+				if err != nil {
+					klog.Fatalf("Failed to start TLS ConfigMap watcher: %v", err)
+				}
+
+				klog.Infof("TLS config loaded from ConfigMap: minVersion=%s, ciphersuites=%s",
+					sdktls.VersionToString(sdkTLSConfig.MinVersion),
+					sdktls.CipherSuitesToString(sdkTLSConfig.CipherSuites))
+
+				srv.TLSConfig.MinVersion = sdkTLSConfig.MinVersion
+				srv.TLSConfig.CipherSuites = sdkTLSConfig.CipherSuites
+			} else {
+				klog.Warning("POD_NAMESPACE not set, skipping TLS ConfigMap watcher (using flag-based TLS config)")
+			}
 
 			if err := http2.ConfigureServer(srv, nil); err != nil {
 				klog.Fatalf("failed to configure http2 server: %v", err)
@@ -360,13 +384,14 @@ func main() {
 		}
 	}
 	{
-		sig := make(chan os.Signal)
+		sig := make(chan os.Signal, 1)
 		gr.Add(func() error {
 			signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 			<-sig
 			klog.Info("received interrupt, shutting down")
 			return nil
 		}, func(err error) {
+			cancel()
 			close(sig)
 		})
 	}
