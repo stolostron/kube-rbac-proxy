@@ -17,8 +17,13 @@ limitations under the License.
 package authn
 
 import (
+	"context"
+	"os"
+
+	"k8s.io/apiserver/pkg/apis/apiserver"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
+	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	"k8s.io/apiserver/plugin/pkg/authenticator/token/oidc"
 )
 
@@ -36,16 +41,39 @@ type OIDCConfig struct {
 
 // NewOIDCAuthenticator returns OIDC authenticator
 func NewOIDCAuthenticator(config *OIDCConfig) (authenticator.Request, error) {
-	tokenAuthenticator, err := oidc.New(oidc.Options{
-		IssuerURL:            config.IssuerURL,
-		ClientID:             config.ClientID,
-		CAFile:               config.CAFile,
-		UsernameClaim:        config.UsernameClaim,
-		UsernamePrefix:       config.UsernamePrefix,
-		GroupsClaim:          config.GroupsClaim,
-		GroupsPrefix:         config.GroupsPrefix,
+	opts := oidc.Options{
+		JWTAuthenticator: apiserver.JWTAuthenticator{
+			Issuer: apiserver.Issuer{
+				URL:       config.IssuerURL,
+				Audiences: []string{config.ClientID},
+			},
+			ClaimMappings: apiserver.ClaimMappings{
+				Username: apiserver.PrefixedClaimOrExpression{
+					Claim:  config.UsernameClaim,
+					Prefix: &config.UsernamePrefix,
+				},
+				Groups: apiserver.PrefixedClaimOrExpression{
+					Claim:  config.GroupsClaim,
+					Prefix: &config.GroupsPrefix,
+				},
+			},
+		},
 		SupportedSigningAlgs: config.SupportedSigningAlgs,
-	})
+	}
+
+	if config.CAFile != "" {
+		caBundle, err := os.ReadFile(config.CAFile)
+		if err != nil {
+			return nil, err
+		}
+		caProvider, err := dynamiccertificates.NewStaticCAContent("oidc-ca", caBundle)
+		if err != nil {
+			return nil, err
+		}
+		opts.CAContentProvider = caProvider
+	}
+
+	tokenAuthenticator, err := oidc.New(context.Background(), opts)
 	if err != nil {
 		return nil, err
 	}

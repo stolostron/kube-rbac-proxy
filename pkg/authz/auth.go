@@ -20,6 +20,7 @@ import (
 	"errors"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/authorization/authorizerfactory"
 	authorizationclient "k8s.io/client-go/kubernetes/typed/authorization/v1"
@@ -62,7 +63,7 @@ type ResourceAttributes struct {
 }
 
 // NewAuthorizer creates an authorizer compatible with the kubelet's needs
-func NewAuthorizer(client authorizationclient.SubjectAccessReviewInterface) (authorizer.Authorizer, error) {
+func NewAuthorizer(client authorizationclient.AuthorizationV1Interface) (authorizer.Authorizer, error) {
 	if client == nil {
 		return nil, errors.New("no client provided, cannot use webhook authorization")
 	}
@@ -70,6 +71,12 @@ func NewAuthorizer(client authorizationclient.SubjectAccessReviewInterface) (aut
 		SubjectAccessReviewClient: client,
 		AllowCacheTTL:             5 * time.Minute,
 		DenyCacheTTL:              30 * time.Second,
+		WebhookRetryBackoff: &wait.Backoff{
+			Duration: 500 * time.Millisecond,
+			Factor:   1.5,
+			Jitter:   0.2,
+			Steps:    5,
+		},
 	}
 	return authorizerConfig.New()
 }
