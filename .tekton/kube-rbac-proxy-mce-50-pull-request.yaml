@@ -43,7 +43,7 @@ spec:
   - name: build-args
     value:
     - IMAGE_NAME=multicluster-engine/kube-rbac-proxy-mce-rhel9
-    - CPE_LABEL=cpe:/a:redhat:multicluster_engine:5.0::el9
+    - CPE_LABEL=cpe:/a:redhat:multicluster_engine:5.1::el9
   pipelineRef:
     resolver: git
     params:

@@ -43,7 +43,7 @@ spec:
   - name: build-args
     value:
     - IMAGE_NAME=rhacm2/kube-rbac-proxy-rhel9
-    - CPE_LABEL=cpe:/a:redhat:acm:5.0::el9
+    - CPE_LABEL=cpe:/a:redhat:acm:5.1::el9
   pipelineRef:
     resolver: git
     params:
