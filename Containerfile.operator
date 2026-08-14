@@ -10,7 +10,7 @@ RUN CGO_ENABLED=1 GOFLAGS="" go build --installsuffix cgo
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 
 ARG IMAGE_NAME="kube-rbac-proxy"
-ARG CPE_LABEL=""
+ARG CPE_LABEL="cpe:/a:redhat:acm:5.1::el9"
 
 COPY --from=builder /workspace/kube-rbac-proxy /usr/local/bin/kube-rbac-proxy
 EXPOSE 8080
