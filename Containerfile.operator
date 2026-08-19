@@ -7,7 +7,7 @@ WORKDIR /workspace
 COPY . .
 RUN CGO_ENABLED=1 GOFLAGS="" go build --installsuffix cgo
 
-FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+FROM registry.redhat.io/ubi9/ubi-minimal-pqc:latest
 
 ARG IMAGE_NAME="kube-rbac-proxy"
 ARG CPE_LABEL="cpe:/a:redhat:acm:5.1::el9"
