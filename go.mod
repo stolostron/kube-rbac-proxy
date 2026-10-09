@@ -7,7 +7,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/oklog/run v1.0.0
 	github.com/spf13/pflag v1.0.5
-	golang.org/x/net v0.57.0
+	golang.org/x/net v0.58.0
 	gopkg.in/yaml.v2 v2.3.0
 	k8s.io/api v0.20.0
 	k8s.io/apimachinery v0.20.0
@@ -58,7 +58,7 @@ require (
 	golang.org/x/text v0.41.0 // indirect
 	golang.org/x/time v0.0.0-20200630173020-3af7569d3a1e // indirect
 	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013 // indirect
-	google.golang.org/grpc v1.82.2 // indirect
+	google.golang.org/grpc v1.83.2 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/go-jose/go-jose.v2 v2.6.3 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
