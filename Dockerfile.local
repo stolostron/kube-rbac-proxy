@@ -1,0 +1,28 @@
+# Local development build only. The shipped image is built by Containerfile.operator,
+# which uses the ART golang builder and UBI base images that require registry auth.
+# This file builds the same source from the submodule using public images so the
+# result can be loaded straight into a kind cluster.
+
+FROM golang:1.26 AS builder
+
+WORKDIR /workspace
+
+COPY openshift-kube-rbac-proxy/ .
+
+# vendor/ is committed upstream, so no module downloads are needed.
+# CGO is disabled here (unlike the production build, which needs CGO=1 for the
+# FIPS crypto backend) so the binary runs on the distroless static base.
+RUN CGO_ENABLED=0 go build \
+    -mod=vendor \
+    -ldflags "-X k8s.io/component-base/version.gitVersion=$(cat VERSION) -X k8s.io/component-base/version/verflag.programName=kube-rbac-proxy" \
+    -o kube-rbac-proxy \
+    ./cmd/kube-rbac-proxy
+
+FROM gcr.io/distroless/static:nonroot
+
+COPY --from=builder /workspace/kube-rbac-proxy /usr/local/bin/kube-rbac-proxy
+
+EXPOSE 8080
+USER 65532:65532
+
+ENTRYPOINT ["/usr/local/bin/kube-rbac-proxy"]

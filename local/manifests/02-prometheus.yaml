@@ -1,0 +1,126 @@
+# Prometheus behind kube-rbac-proxy.
+#
+# This mirrors how MCO uses the proxy in
+# operators/endpointmetrics/manifests/prometheus/prometheus-resource.yaml:
+# the proxy fronts the *entire* Prometheus HTTP API (/api/v1/*, /federate, /metrics),
+# not just a scrape endpoint. There is no --config-file and no --allow-paths, so
+# every request is authorized by SubjectAccessReview against its non-resource URL.
+#
+# Note there is also no --tls-cert-file: the proxy generates a self-signed
+# certificate at startup, which is exactly what MCO's managed-cluster sidecars rely on.
+#
+# Worth knowing before copying this pattern: gating a whole HTTP API by
+# non-resource URL overlaps with Kubernetes' own URL space. The default
+# system:discovery ClusterRole is bound to the system:authenticated group and
+# grants GET on "/api/*", so every authenticated identity in the cluster can reach
+# Prometheus' /api/v1/* endpoints through this proxy. /federate and /metrics sit
+# outside that prefix and remain gated by real RBAC. local/test.sh asserts both.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: krp-demo
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+    scrape_configs:
+      # Scrape ourselves directly on localhost, bypassing the proxy.
+      - job_name: prometheus
+        static_configs:
+          - targets: ['127.0.0.1:9090']
+
+      # Scrape Alertmanager *through* its kube-rbac-proxy sidecar, authenticating
+      # with this pod's service account token. The "prometheus" service account has
+      # no RBAC granting /metrics; it succeeds because it is named in the proxy's
+      # static authorization config. This is the path that was silently broken in
+      # the old stolostron fork, which had no static authorization support at all.
+      - job_name: alertmanager-via-kube-rbac-proxy
+        scheme: https
+        tls_config:
+          insecure_skip_verify: true
+        authorization:
+          type: Bearer
+          credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        static_configs:
+          - targets: ['alertmanager.krp-demo.svc:9096']
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: krp-demo
+spec:
+  selector:
+    app: prometheus
+  ports:
+    - name: https
+      port: 9091
+      targetPort: https
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: krp-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      serviceAccountName: prometheus
+      securityContext:
+        runAsNonRoot: true
+        # Must be numeric: the upstream images declare a named user ("nobody"),
+        # which the kubelet cannot verify against runAsNonRoot on its own.
+        runAsUser: 65534
+        fsGroup: 65534
+      containers:
+        - name: prometheus
+          image: quay.io/prometheus/prometheus:v2.53.0
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            # Bind to loopback only, so the proxy is the sole way in.
+            - --web.listen-address=127.0.0.1:9090
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+            - name: data
+              mountPath: /prometheus
+          resources:
+            requests:
+              cpu: 10m
+              memory: 128Mi
+
+        - name: kube-rbac-proxy
+          image: localhost/kube-rbac-proxy:local
+          imagePullPolicy: IfNotPresent
+          args:
+            - --logtostderr
+            - --secure-listen-address=:9091
+            - --upstream=http://127.0.0.1:9090/
+          ports:
+            - name: https
+              containerPort: 9091
+          resources:
+            requests:
+              cpu: 10m
+              memory: 20Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+        - name: data
+          emptyDir: {}

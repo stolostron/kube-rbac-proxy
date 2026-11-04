@@ -1,0 +1,57 @@
+# Three identical curl pods that differ only in which service account they run as.
+# local/test.sh execs into these to show how the same request is authorized,
+# or not, depending on the identity presenting the token.
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: client-no-access
+  namespace: krp-demo
+  labels:
+    app: krp-demo-client
+spec:
+  serviceAccountName: no-access
+  containers:
+    - name: curl
+      image: curlimages/curl:8.8.0
+      command: ["sleep", "infinity"]
+      resources:
+        requests:
+          cpu: 5m
+          memory: 16Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: client-metrics-reader
+  namespace: krp-demo
+  labels:
+    app: krp-demo-client
+spec:
+  serviceAccountName: metrics-reader
+  containers:
+    - name: curl
+      image: curlimages/curl:8.8.0
+      command: ["sleep", "infinity"]
+      resources:
+        requests:
+          cpu: 5m
+          memory: 16Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: client-api-reader
+  namespace: krp-demo
+  labels:
+    app: krp-demo-client
+spec:
+  serviceAccountName: api-reader
+  containers:
+    - name: curl
+      image: curlimages/curl:8.8.0
+      command: ["sleep", "infinity"]
+      resources:
+        requests:
+          cpu: 5m
+          memory: 16Mi
