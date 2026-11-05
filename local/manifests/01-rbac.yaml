@@ -1,0 +1,122 @@
+# Service accounts and RBAC for the demo.
+#
+# Every pod that runs a kube-rbac-proxy sidecar needs system:auth-delegator so the
+# proxy can create TokenReviews (authentication) and SubjectAccessReviews
+# (authorization) against the API server. This is the same grant MCO gives the
+# MCOA addon manager in its cluster_role.yaml.
+#
+# The client service accounts exist to demonstrate the three distinct paths a
+# request can take through the authorizer union:
+#   hardcoded-metrics  ->  static  ->  sar
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: krp-demo
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: alertmanager
+  namespace: krp-demo
+---
+# Can reach /metrics only because RBAC says so -> authorized by the "sar" authorizer.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: metrics-reader
+  namespace: krp-demo
+---
+# Can reach /federate on the Prometheus proxy -> authorized by the "sar" authorizer
+# against non-resource URLs, which is how MCO's metrics-collector federates.
+#
+# /api/v1/query is listed below for completeness, but note it is already granted to
+# every authenticated identity by the built-in system:discovery ClusterRole, which
+# covers "/api/*". See the comment in 02-prometheus.yaml.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: api-reader
+  namespace: krp-demo
+---
+# Deliberately has no permissions at all -> every request must be rejected.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: no-access
+  namespace: krp-demo
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: krp-demo-prometheus-auth-delegator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: krp-demo
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: krp-demo-alertmanager-auth-delegator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: alertmanager
+    namespace: krp-demo
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: krp-demo-metrics-reader
+rules:
+  - nonResourceURLs:
+      - /metrics
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: krp-demo-metrics-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: krp-demo-metrics-reader
+subjects:
+  - kind: ServiceAccount
+    name: metrics-reader
+    namespace: krp-demo
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: krp-demo-prometheus-api-reader
+rules:
+  - nonResourceURLs:
+      - /api/v1/query
+      - /federate
+      - /metrics
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: krp-demo-prometheus-api-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: krp-demo-prometheus-api-reader
+subjects:
+  - kind: ServiceAccount
+    name: api-reader
+    namespace: krp-demo

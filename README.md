@@ -18,6 +18,12 @@ git commit -s -m "Update submodule to <version>"
 To build against a different OpenShift release line, change `branch` in
 `.gitmodules` and re-run the above.
 
+## Trying a change locally
+
+`make demo` builds the image from the submodule with `Dockerfile.local` and runs
+it in kind in front of a Prometheus and an Alertmanager, wired the same way MCO
+wires them, then asserts the authorization behaviour. See [local/README.md](local/README.md).
+
 ## Notes for the build pipeline
 
 The upstream repository commits its `vendor/` directory, so the build is already
