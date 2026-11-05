@@ -1,0 +1,19 @@
+name: 'Check backplane branches'
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+jobs:
+  check-backplane-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check branches
+        run: |
+          echo ${{ github.base_ref }}
+          if [[ ${{ github.base_ref }} == backplane-* ]]; then
+            echo "You are trying to merge to a backplane branch which is fowarded to the corresponding release branch. Re-create the PR on the release branch if required."
+            echo "Exceptions to this flow is for: backplane-2.6 and backplane-2.8"
+            exit 1
+          fi
