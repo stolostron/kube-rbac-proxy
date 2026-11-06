@@ -1,6 +1,6 @@
 module github.com/brancz/kube-rbac-proxy
 
-go 1.25.0
+go 1.26
 
 require (
 	github.com/ghodss/yaml v1.0.0
@@ -64,7 +64,7 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/square/go-jose.v2 v2.2.2 // indirect
 	k8s.io/kube-openapi v0.0.0-20201113171705-d219536bb9fd // indirect
-	k8s.io/utils v0.0.0-20201110183641-67b214c5f920 // indirect
+	k8s.io/utils v0.0.0-20261023123148-ca04ba58ecab // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.9 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.0.2 // indirect
 	sigs.k8s.io/yaml v1.2.0 // indirect
