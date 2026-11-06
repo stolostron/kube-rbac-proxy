@@ -15,7 +15,7 @@ COPY openshift-kube-rbac-proxy/ .
 # FIPS-validated crypto backend provided by the ART golang builder.
 # The -X flags are the subset of upstream's Makefile ldflags that survive losing
 # the .git directory; gitCommit is omitted because COPY does not carry it.
-RUN CGO_ENABLED=1 GOFLAGS="" go build \
+RUN CGO_ENABLED=1 GOEXPERIMENT=strictfipsruntime GOFLAGS="" go build \
     -mod=vendor \
     --installsuffix cgo \
     -ldflags "-X k8s.io/component-base/version.gitVersion=$(cat VERSION) -X k8s.io/component-base/version/verflag.programName=kube-rbac-proxy" \
