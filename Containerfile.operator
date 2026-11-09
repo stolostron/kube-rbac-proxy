@@ -1,18 +1,35 @@
 # Copyright Contributors to the Open Cluster Management project
 # Licensed under the Apache License 2.0
 
-FROM registry.redhat.io/openshift/golang-builder:golang-builder-v1.25-rhel9 AS builder
+FROM registry.redhat.io/openshift/golang-builder:golang-builder-v1.26-rhel9 AS builder
 
 WORKDIR /workspace
-COPY . .
-RUN CGO_ENABLED=1 GOFLAGS="" go build --installsuffix cgo
 
-FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+# Source is imported via the openshift-kube-rbac-proxy submodule, which tracks
+# https://github.com/openshift/kube-rbac-proxy. To move to a new version, bump
+# the submodule reference rather than editing anything here.
+COPY openshift-kube-rbac-proxy/ .
+
+# The upstream repository commits its vendor/ directory, so -mod=vendor keeps the
+# build fully offline and hermetic-safe. CGO_ENABLED=1 is required for the
+# FIPS-validated crypto backend provided by the ART golang builder.
+# The -X flags are the subset of upstream's Makefile ldflags that survive losing
+# the .git directory; gitCommit is omitted because COPY does not carry it.
+RUN CGO_ENABLED=1 GOFLAGS="" go build \
+    -mod=vendor \
+    --installsuffix cgo \
+    -ldflags "-X k8s.io/component-base/version.gitVersion=$(cat VERSION) -X k8s.io/component-base/version/verflag.programName=kube-rbac-proxy" \
+    -o kube-rbac-proxy \
+    ./cmd/kube-rbac-proxy
+
+FROM registry.redhat.io/ubi9/ubi-minimal-pqc:latest
 
 ARG IMAGE_NAME="kube-rbac-proxy"
 ARG CPE_LABEL=""
 
 COPY --from=builder /workspace/kube-rbac-proxy /usr/local/bin/kube-rbac-proxy
+COPY --from=builder /workspace/LICENSE /licenses/.
+
 EXPOSE 8080
 USER 65532:65532
 
@@ -28,4 +45,3 @@ io.k8s.display-name="kube-rbac-proxy" \
 maintainer="" \
 description="kube-rbac-proxy" \
 io.k8s.description="kube-rbac-proxy"
-
