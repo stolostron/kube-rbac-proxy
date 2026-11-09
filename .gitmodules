@@ -1,0 +1,4 @@
+[submodule "openshift-kube-rbac-proxy"]
+	path = openshift-kube-rbac-proxy
+	url = https://github.com/openshift/kube-rbac-proxy.git
+	branch = release-5.1
