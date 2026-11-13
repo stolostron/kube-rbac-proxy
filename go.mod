@@ -6,7 +6,7 @@ require (
 	github.com/ghodss/yaml v1.0.0
 	github.com/google/go-cmp v0.7.0
 	github.com/oklog/run v1.0.0
-	github.com/spf13/pflag v1.0.5
+	github.com/spf13/pflag v1.1.0
 	golang.org/x/net v0.55.0
 	gopkg.in/yaml.v2 v2.3.0
 	k8s.io/api v0.20.0
