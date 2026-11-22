@@ -8,7 +8,7 @@ require (
 	github.com/oklog/run v1.2.0
 	github.com/spf13/pflag v1.1.0
 	golang.org/x/net v0.63.0
-	gopkg.in/yaml.v2 v2.3.0
+	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.20.0
 	k8s.io/apimachinery v0.20.0
 	k8s.io/apiserver v0.19.2
