@@ -1,3 +1,6 @@
+//go:build tools
+// +build tools
+
 /*
 Copyright 2020 Frederic Branczyk All rights reserved.
 
@@ -14,10 +17,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-//+build tools
-
 package tools
 
 import (
-	_ "github.com/campoy/embedmd"
+	_ "github.com/campoy/embedmd/v2"
 )
